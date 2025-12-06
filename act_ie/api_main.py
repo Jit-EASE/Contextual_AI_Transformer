@@ -1,5 +1,10 @@
 # act_ie/api_main.py
 
+import act_ie.models
+print("DEBUG: models.py is located here:", act_ie.models.__file__)
+print("DEBUG: QueryRequest exists?", hasattr(act_ie.models, "QueryRequest"))
+print("DEBUG: RiskAssessment exists?", hasattr(act_ie.models, "RiskAssessment"))
+
 import traceback
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
