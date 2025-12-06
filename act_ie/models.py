@@ -29,7 +29,19 @@ class EngineAnswer(BaseModel):
     meta: AnswerMeta
 
 
-# 🔥 ADD THIS MISSING CLASS (required by api_main.py)
+# NEW — required by engine.py
+class RiskLevel(str):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class RiskAssessment(BaseModel):
+    level: str
+    reason: str
+
+
+# NEW — required by api_main.py
 class QueryRequest(BaseModel):
     query: str
     county: str
