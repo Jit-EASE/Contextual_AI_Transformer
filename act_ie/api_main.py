@@ -1,73 +1,89 @@
 # act_ie/api_main.py
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from typing import Dict, Any
+from pydantic import BaseModel
+from typing import Optional
 
 from .engine import ActIEEngine
-from .models import NumericContext
-
+from .numeric_context import NumericContext
 
 app = FastAPI(
-    title="ACT-IE: Agri-Context Transformer for Ireland",
-    version="0.1.0",
-    description="Contextual AI backend for Irish agri-food analytics.",
+    title="ACT-IE API",
+    description="Agri-Context Transformer for Ireland (Lazy-loaded version)",
+    version="1.0"
 )
 
-# Initialise engine once (warm start for Railway)
-engine = ActIEEngine()
+# ---------------------------------------------
+# Lazy-loaded ACT-IE engine (fixes Railway cold start)
+# ---------------------------------------------
+
+engine = None
+
+def get_engine():
+    global engine
+    if engine is None:
+        try:
+            engine = ActIEEngine()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Engine initialization failed: {e}")
+    return engine
 
 
-class NumericContextInput(BaseModel):
-    milk_price_eur_per_litre: float = Field(..., example=0.42)
-    milk_price_volatility_12m: float = Field(..., example=0.03)
-    rainfall_anomaly_last_6m_mm: float = Field(..., example=-75.0)
-    ndvi_mean_last_season: float = Field(..., example=0.61)
-    herd_size: int = Field(..., example=85)
+# ---------------------------------------------
+# Request Model
+# ---------------------------------------------
+
+class QueryRequest(BaseModel):
+    query: str
+    county: str
+    sector: str
+
+    milk_price_eur_per_litre: float
+    milk_price_volatility_12m: float
+    rainfall_anomaly_last_6m_mm: float
+    ndvi_mean_last_season: float
+    herd_size: int
 
 
-class AnswerRequestBody(BaseModel):
-    query: str = Field(..., example="What are the main short-term risks for grass-based dairy farmers?")
-    county: str = Field(..., example="Cork")
-    sector: str = Field(..., example="Dairy")
-    numeric: NumericContextInput
+# ---------------------------------------------
+# Endpoints
+# ---------------------------------------------
+
+@app.get("/")
+def root():
+    return {
+        "message": "ACT-IE API is running. Use /docs to test the endpoints."
+    }
 
 
 @app.get("/health")
-def health() -> Dict[str, Any]:
-    return {"status": "ok", "message": "ACT-IE backend running"}
+def health():
+    return {"status": "ok"}
 
 
-@app.post("/answer")
-def answer(req: AnswerRequestBody) -> Dict[str, Any]:
+@app.post("/act-ie/query")
+def act_ie_query(payload: QueryRequest):
+
+    engine = get_engine()  # Lazy initialization
+
+    numeric = NumericContext(
+        milk_price_eur_per_litre=payload.milk_price_eur_per_litre,
+        milk_price_volatility_12m=payload.milk_price_volatility_12m,
+        rainfall_anomaly_last_6m_mm=payload.rainfall_anomaly_last_6m_mm,
+        ndvi_mean_last_season=payload.ndvi_mean_last_season,
+        herd_size=payload.herd_size,
+    )
+
     try:
-        numeric = NumericContext(
-            milk_price_eur_per_litre=req.numeric.milk_price_eur_per_litre,
-            milk_price_volatility_12m=req.numeric.milk_price_volatility_12m,
-            rainfall_anomaly_last_6m_mm=req.numeric.rainfall_anomaly_last_6m_mm,
-            ndvi_mean_last_season=req.numeric.ndvi_mean_last_season,
-            herd_size=req.numeric.herd_size,
-        )
-
-        result = engine.answer(
-            query=req.query,
+        response = engine.answer(
+            query=payload.query,
             numeric=numeric,
-            county=req.county,
-            sector=req.sector,
+            county=payload.county,
+            sector=payload.sector,
+            top_k_docs=5,
+            max_tokens=450
         )
+        return {"response": response}
 
-        return {
-            "answer": result.answer,
-            "meta": {
-                "county": result.meta.county,
-                "sector": result.meta.sector,
-                "retrieved_doc_ids": result.meta.retrieved_doc_ids,
-                "risk": {
-                    "level": result.meta.risk_assessment.level,
-                    "reason": result.meta.risk_assessment.reason,
-                },
-                "numeric_summary": result.meta.numeric_summary,
-            },
-        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"ACT-IE error: {e}")
