@@ -1,22 +1,14 @@
-# act_ie/models.py
-
-from dataclasses import dataclass
-from typing import List, Optional, Literal, Dict
+from pydantic import BaseModel
+from typing import List, Optional
 
 
-@dataclass
-class Document:
+class Document(BaseModel):
     doc_id: str
     title: str
     text: str
 
 
-@dataclass
-class NumericContext:
-    """
-    Minimal numeric context for v0.
-    Extend this as needed (fertiliser prices, emissions, etc.).
-    """
+class NumericContext(BaseModel):
     milk_price_eur_per_litre: float
     milk_price_volatility_12m: float
     rainfall_anomaly_last_6m_mm: float
@@ -24,35 +16,22 @@ class NumericContext:
     herd_size: int
 
 
-RiskLevel = Literal["minimal", "limited", "high"]
-
-
-@dataclass
-class RiskAssessment:
-    level: RiskLevel
-    reason: str
-
-
-@dataclass
-class AnswerMeta:
+class AnswerMeta(BaseModel):
     county: str
     sector: str
     retrieved_doc_ids: List[str]
-    risk_assessment: RiskAssessment
+    risk_assessment: str
     numeric_summary: str
 
 
-@dataclass
-class EngineAnswer:
+class EngineAnswer(BaseModel):
     answer: str
     meta: AnswerMeta
 
 
-# ---- Simple DTOs for API layer (FastAPI schemas will reuse these structures) ----
-
-@dataclass
-class AnswerRequest:
+# 🔥 ADD THIS MISSING CLASS (required by api_main.py)
+class QueryRequest(BaseModel):
     query: str
     county: str
     sector: str
-    numeric: Dict[str, float]  # keys align with NumericContext fields
+    numeric: NumericContext
